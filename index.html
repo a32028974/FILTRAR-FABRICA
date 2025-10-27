@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Listas: Marcas y Fábricas</title>
+  <style>
+    :root { --bg:#0b1220; --card:#111827; --muted:#9ca3af; --txt:#e5e7eb; --accent:#3b82f6; }
+    body{margin:0;font-family:system-ui,Segoe UI,Roboto,Arial;background:var(--bg);color:var(--txt)}
+    .wrap{max-width:900px;margin:32px auto;padding:0 16px}
+    .panel{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px;align-items:center}
+    select, input, button{padding:10px 12px;border-radius:10px;border:1px solid #26314a;background:#0e1628;color:var(--txt)}
+    button{cursor:pointer}
+    button.primary{background:var(--accent);border-color:var(--accent);color:white}
+    .card{background:var(--card);border:1px solid #1f2937;border-radius:16px;padding:16px}
+    .muted{color:var(--muted)}
+    .row{display:flex;gap:16px;flex-wrap:wrap;align-items:center}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    @media (max-width:700px){ .grid{grid-template-columns:1fr} }
+    ul{list-style:none;margin:0;padding:0;max-height:60vh;overflow:auto}
+    li{padding:10px 12px;border:1px solid #1f2937;border-radius:10px;background:#0f172a}
+    .count{font-variant-numeric:tabular-nums;color:#a3bffa}
+    .chip{background:#0e1628;border:1px solid #1f2937;border-radius:999px;padding:4px 10px}
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <h1>Listas de <span class="muted">Marcas</span> y <span class="muted">Fábricas</span></h1>
+
+    <section class="card">
+      <div class="panel">
+        <select id="tipo">
+          <option value="marcas">Marcas</option>
+          <option value="fabricas">Fábricas</option>
+        </select>
+        <label class="row" style="gap:6px">
+          <input type="checkbox" id="contar" />
+          <span class="muted">Incluir cantidades</span>
+        </label>
+        <input id="q" type="search" placeholder="Filtrar..." />
+        <button class="primary" id="btnCargar">Cargar</button>
+        <button id="btnCSV">Exportar CSV</button>
+        <span id="total" class="chip muted"></span>
+      </div>
+
+      <ul id="lista"></ul>
+    </section>
+  </main>
+
+  <script>
+    // === CONFIG ===
+    const API_URL = "PEGÁ_ACÁ_TU_URL_DE_APPS_SCRIPT/exec"; // <-- reemplazar
+
+    const els = {
+      tipo: document.getElementById('tipo'),
+      contar: document.getElementById('contar'),
+      q: document.getElementById('q'),
+      btnCargar: document.getElementById('btnCargar'),
+      btnCSV: document.getElementById('btnCSV'),
+      lista: document.getElementById('lista'),
+      total: document.getElementById('total'),
+    };
+
+    let itemsRaw = []; // última respuesta (array simple u objetos {name,count})
+
+    function render(list) {
+      els.lista.innerHTML = '';
+      const frag = document.createDocumentFragment();
+      for (const it of list) {
+        const li = document.createElement('li');
+        if (typeof it === 'string') {
+          li.textContent = it;
+        } else {
+          li.innerHTML = `<div class="row" style="justify-content:space-between">
+              <span>${it.name}</span>
+              <span class="count">${it.count}</span>
+          </div>`;
+        }
+        frag.appendChild(li);
+      }
+      els.lista.appendChild(frag);
+      els.total.textContent = `Total: ${list.length}`;
+    }
+
+    function filtrar(q) {
+      q = (q || '').trim().toLowerCase();
+      if (!q) return itemsRaw.slice();
+      return itemsRaw.filter(x => (typeof x === 'string' ? x : x.name).toLowerCase().includes(q));
+    }
+
+    async function cargar() {
+      const params = new URLSearchParams({
+        action: els.tipo.value,
+        includeCount: els.contar.checked ? '1' : ''
+      });
+      const url = `${API_URL}?${params.toString()}`;
+      els.btnCargar.disabled = true;
+      try {
+        const r = await fetch(url, { method: 'GET' });
+        const data = await r.json();
+        if (!data.ok) throw new Error(data.error || 'Error desconocido');
+        itemsRaw = data.items || [];
+        render(filtrar(els.q.value));
+      } catch (err) {
+        alert('Error: ' + err.message);
+      } finally {
+        els.btnCargar.disabled = false;
+      }
+    }
+
+    function exportCSV() {
+      const list = filtrar(els.q.value);
+      const withCount = typeof list[0] === 'object';
+      const rows = withCount ? [['NOMBRE','CANTIDAD'], ...list.map(x => [x.name, x.count])]
+                             : [['NOMBRE'], ...list.map(x => [x])];
+      const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `${els.tipo.value}-${new Date().toISOString().slice(0,10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    }
+
+    // eventos
+    els.btnCargar.addEventListener('click', cargar);
+    els.q.addEventListener('input', () => render(filtrar(els.q.value)));
+    els.btnCSV.addEventListener('click', exportCSV);
+
+    // primera carga
+    cargar();
+  </script>
+</body>
+</html>
